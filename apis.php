@@ -299,16 +299,11 @@
         <h2 id="case-title" class="fw-bold mb-4 text-center">Praxisbeispiel: eCommerce ↔ ERP</h2>
         <div class="row align-items-center g-4">
           <div class="col-lg-6">
-            <figure class="mb-0">
-              <img src="/assets/img/apis-banner.webp"
-                alt="API Use Case – Shop mit ERP verbunden"
-                class="img-fluid rounded-4 shadow-lg"
-                loading="lazy" decoding="async"
-                width="1200" height="720"
-                srcset="/assets/img/apis-banner.webp 1200w, /assets/img/apis-banner-992.webp 992w, /assets/img/apis-banner-768.webp 768w"
-                sizes="(min-width: 992px) 50vw, 100vw">
-              <figcaption class="visually-hidden">Schematische Darstellung einer API-Integration zwischen Shop und ERP</figcaption>
-            </figure>
+            <img src="/assets/img/apis-1.webp"
+              alt="API Use Case – Shop mit ERP verbunden"
+              class="img-fluid rounded-4"
+              loading="lazy" decoding="async"
+              class="mb-0">
           </div>
           <div class="col-lg-6">
             <p class="lead">

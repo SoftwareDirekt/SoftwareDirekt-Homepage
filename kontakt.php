@@ -126,7 +126,7 @@
         <!-- Form Section -->
         <div class="col-12 col-lg-6">
           <div class="contact-form p-4 p-lg-5">
-            <form id="contactForm" autocomplete="off" novalidate>
+            <form id="contactForm" action="/send_mail.php" method="post" autocomplete="off" novalidate>
               <div class="mb-4">
                 <label for="name" class="form-label fw-bold">Name</label>
                 <input type="text" class="form-control form-control-lg border-0 bg-light" id="name" name="name" placeholder="Ihr Name" required>
@@ -142,16 +142,23 @@
                 <textarea class="form-control form-control-lg border-0 bg-light" id="message" name="message" rows="5" placeholder="Ihre Nachricht" required></textarea>
                 <div class="invalid-feedback">Bitte geben Sie eine Nachricht ein.</div>
               </div>
+
+              <!-- Honeypot -->
+              <input type="text" name="website" id="website" class="d-none" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+              <!-- (Optional) CSRF -->
+              <!-- <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf'] ?? '') ?>"> -->
+
               <div class="col-12 text-center text-lg-start mt-5">
                 <button class="btn btn-pink fs-5 w-100" id="btn-submit" type="submit" aria-label="Formular absenden">
                   <i class="bi bi-send"></i> SENDEN
                 </button>
               </div>
-              <!-- Hier erscheinen die Rückmeldungen -->
               <div id="formResponse" class="mt-4"></div>
             </form>
           </div>
         </div>
+
         <!-- Form Section ENDE -->
       </div>
     </div>
@@ -177,36 +184,58 @@
   <script src="/assets/js/app.min.js" defer="defer"></script>
 
   <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener('DOMContentLoaded', function() {
       const form = document.getElementById('contactForm');
-      const formResponse = document.getElementById('formResponse');
-      form.addEventListener('submit', function(e) {
+      const btn = document.getElementById('btn-submit');
+      const resp = document.getElementById('formResponse');
+
+      function setMsg(type, text) {
+        resp.innerHTML = `<div class="alert alert-${type}" role="alert">${text}</div>`;
+      }
+
+      form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        form.classList.add('was-validated');
-        if (!form.checkValidity()) return;
 
-        const formData = new FormData(form);
+        // Native Validierung
+        if (!form.checkValidity()) {
+          form.classList.add('was-validated');
+          return;
+        }
 
-        fetch('send-mail.php', {
+        btn.disabled = true;
+        setMsg('info', 'Sende…');
+
+        try {
+          const formData = new FormData(form);
+          const endpoint = form.getAttribute('action') || '/send_mail.php';
+
+          const res = await fetch(endpoint, {
             method: 'POST',
-            body: formData
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              formResponse.innerHTML = '<div class="alert alert-success">Ihre Nachricht wurde erfolgreich versendet!</div>';
-              form.reset();
-              form.classList.remove('was-validated');
-            } else {
-              formResponse.innerHTML = '<div class="alert alert-danger">Ihre Nachricht konnte nicht versendet werden! Kontaktieren Sie uns jetzt.</div>';
+            body: formData,
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
             }
-          })
-          .catch(() => {
-            formResponse.innerHTML = '<div class="alert alert-danger">Ihre Nachricht konnte nicht versendet werden! Kontaktieren Sie uns jetzt.</div>';
           });
+
+          const data = await res.json().catch(() => null);
+
+          if (!res.ok || !data || data.success !== true) {
+            const err = (data && data.error) ? data.error : `HTTP ${res.status}`;
+            setMsg('danger', `Fehler beim Senden: ${err}`);
+          } else {
+            setMsg('success', 'Vielen Dank! Ihre Nachricht wurde übermittelt.');
+            form.reset();
+            form.classList.remove('was-validated');
+          }
+        } catch (err) {
+          setMsg('danger', 'Netzwerkfehler. Bitte später erneut versuchen.');
+        } finally {
+          btn.disabled = false;
+        }
       });
     });
   </script>
+
 </body>
 
 </html>

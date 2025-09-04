@@ -31,9 +31,9 @@ function has_crlf(string $s): bool
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
   json_fail(405, 'Ungültige Anfrage');
 }
-$now = time();
+$now  = time();
 $last = (int)($_SESSION['last_submit_ts'] ?? 0);
-if ($now - $last < 10) { // 10s Throttle
+if ($now - $last < 10) {
   json_fail(429, 'Bitte kurz warten und erneut senden.');
 }
 $_SESSION['last_submit_ts'] = $now;
@@ -41,8 +41,7 @@ $_SESSION['last_submit_ts'] = $now;
 // ---------- Honeypot ----------
 $hp = trim((string)($_POST['website'] ?? '')); // verstecktes Feld im Formular
 if ($hp !== '') {
-  // still succeed to bots
-  json_ok('Danke.');
+  json_ok('Danke.'); // still succeed to bots
 }
 
 // ---------- Input ----------
@@ -66,31 +65,31 @@ if ($name === '' || $email === '' || $message === '') {
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
   json_fail(400, 'Bitte eine gültige E-Mail angeben.');
 }
-// Länge begrenzen (Missbrauch vermeiden)
-if (mb_strlen($name) > 200)    $name    = mb_substr($name, 0, 200);
-if (mb_strlen($email) > 254)   $email   = mb_substr($email, 0, 254);
+
+// Länge begrenzen
+if (mb_strlen($name) > 200)     $name    = mb_substr($name, 0, 200);
+if (mb_strlen($email) > 254)    $email   = mb_substr($email, 0, 254);
 if (mb_strlen($message) > 5000) $message = mb_substr($message, 0, 5000);
 
 // ---------- Mail ----------
 try {
   $mail = new PHPMailer(true);
-  $mail->CharSet    = 'UTF-8';
-  $mail->Encoding   = 'base64';
+  $mail->CharSet  = 'UTF-8';
+  $mail->Encoding = 'base64';
   $mail->setLanguage('de');
 
-  // SMTP
+  // SMTP (Microsoft 365)
   $mail->isSMTP();
-  $mail->Host       = SMTP_HOST;          // z.B. smtp.office365.com
+  $mail->Host       = SMTP_HOST;       // smtp.office365.com
   $mail->SMTPAuth   = true;
-  $mail->Username   = SMTP_USERNAME;      // z.B. office@softwaredirekt.at
-  $mail->Password   = SMTP_PASSWORD;      // App-Passwort bei M365
-  // Microsoft 365 verlangt STARTTLS auf 587
+  $mail->Username   = SMTP_USERNAME;   // office@softwaredirekt.at
+  $mail->Password   = SMTP_PASSWORD;   // App-Passwort
   if ((int)SMTP_PORT === 587) {
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
   } elseif ((int)SMTP_PORT === 465) {
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
   } else {
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // Default sicher
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
   }
   $mail->Port = (int)SMTP_PORT;
 
@@ -98,14 +97,7 @@ try {
   $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
   $mail->addAddress(SMTP_TO);
   $mail->addReplyTo($email, $name);
-  // Optional bessere Bounces:
-  // $mail->Sender = SMTP_FROM; // Return-Path (muss zur Domain passen)
-
-  // DKIM (optional; nur aktivieren, wenn Schlüssel vorhanden)
-  // $mail->DKIM_domain = 'deinedomain.tld';
-  // $mail->DKIM_selector = 'default';
-  // $mail->DKIM_private = __DIR__ . '/dkim-private.key';
-  // $mail->DKIM_identity = SMTP_FROM;
+  // Optional: $mail->Sender = SMTP_FROM; // Return-Path
 
   // Inhalt (Text + HTML)
   $subject = 'Kontaktformular – ' . $name;
@@ -120,10 +112,8 @@ try {
   $mail->AltBody = $plain;
 
   $mail->send();
-
   json_ok('Ihre Nachricht wurde erfolgreich versendet!');
 } catch (Exception $e) {
-  // detailliertes Logging lokal
   @file_put_contents(
     __DIR__ . '/mail_error.log',
     sprintf("[%s] PHPMailer: %s | ErrorInfo: %s\n", date('c'), $e->getMessage(), isset($mail) ? $mail->ErrorInfo : '-'),

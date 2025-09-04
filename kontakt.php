@@ -127,34 +127,35 @@
         <div class="col-12 col-lg-6">
           <div class="contact-form p-4 p-lg-5">
             <form id="contactForm" action="/send_mail.php" method="post" autocomplete="off" novalidate>
-              <div class="mb-4">
-                <label for="name" class="form-label fw-bold">Name</label>
-                <input type="text" class="form-control form-control-lg border-0 bg-light" id="name" name="name" placeholder="Ihr Name" required>
+              <div class="mb-3">
+                <label for="name" class="form-label fw-semibold">Name</label>
+                <input type="text" class="form-control" id="name" name="name" placeholder="Ihr Name" required>
                 <div class="invalid-feedback">Bitte geben Sie Ihren Namen ein.</div>
               </div>
-              <div class="mb-4">
-                <label for="email" class="form-label fw-bold">E-Mail</label>
-                <input type="email" class="form-control form-control-lg border-0 bg-light" id="email" name="email" placeholder="ihre@email.com" required>
+
+              <div class="mb-3">
+                <label for="email" class="form-label fw-semibold">E-Mail</label>
+                <input type="email" class="form-control" id="email" name="email" placeholder="ihre@email.com" required>
                 <div class="invalid-feedback">Bitte geben Sie eine gültige E-Mail ein.</div>
               </div>
-              <div class="mb-4">
-                <label for="message" class="form-label fw-bold">Nachricht</label>
-                <textarea class="form-control form-control-lg border-0 bg-light" id="message" name="message" rows="5" placeholder="Ihre Nachricht" required></textarea>
+
+              <div class="mb-3">
+                <label for="message" class="form-label fw-semibold">Nachricht</label>
+                <textarea class="form-control" id="message" name="message" rows="5" placeholder="Ihre Nachricht" required></textarea>
                 <div class="invalid-feedback">Bitte geben Sie eine Nachricht ein.</div>
               </div>
 
               <!-- Honeypot -->
               <input type="text" name="website" id="website" class="d-none" tabindex="-1" autocomplete="off" aria-hidden="true">
 
-              <!-- (Optional) CSRF -->
-              <!-- <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf'] ?? '') ?>"> -->
-
-              <div class="col-12 text-center text-lg-start mt-5">
-                <button class="btn btn-pink fs-5 w-100" id="btn-submit" type="submit" aria-label="Formular absenden">
-                  <i class="bi bi-send"></i> SENDEN
+              <div class="d-grid mt-4">
+                <button class="btn btn-blue" id="btn-submit" type="submit" aria-label="Formular absenden">
+                  Absenden
                 </button>
               </div>
-              <div id="formResponse" class="mt-4"></div>
+
+              <!-- Rückmeldungen -->
+              <div id="formResponse" class="mt-3" aria-live="polite"></div>
             </form>
           </div>
         </div>
@@ -184,26 +185,39 @@
   <script src="/assets/js/app.min.js" defer="defer"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    (function() {
       const form = document.getElementById('contactForm');
       const btn = document.getElementById('btn-submit');
       const resp = document.getElementById('formResponse');
+
+      // ARIA: Bildschirmleser informiert werden
+      if (resp && !resp.hasAttribute('aria-live')) {
+        resp.setAttribute('aria-live', 'polite');
+      }
 
       function setMsg(type, text) {
         resp.innerHTML = `<div class="alert alert-${type}" role="alert">${text}</div>`;
       }
 
       form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        // Native Validierung
+        // Native Validation
         if (!form.checkValidity()) {
+          e.preventDefault();
+          e.stopPropagation();
           form.classList.add('was-validated');
           return;
         }
 
+        // Progressive Enhancement: nur AJAX wenn fetch verfügbar
+        if (!window.fetch) return;
+
+        e.preventDefault();
         btn.disabled = true;
-        setMsg('info', 'Sende…');
+        setMsg('info', 'Sende …');
+
+        // Timeout absichern (z. B. 15s)
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 15000);
 
         try {
           const formData = new FormData(form);
@@ -213,28 +227,44 @@
             method: 'POST',
             body: formData,
             headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json'
+            },
+            cache: 'no-store',
+            credentials: 'same-origin',
+            signal: controller.signal
           });
 
-          const data = await res.json().catch(() => null);
+          // Erwartet JSON { success: bool, message?: string }
+          let data = null;
+          try {
+            data = await res.json();
+          } catch (_) {}
 
-          if (!res.ok || !data || data.success !== true) {
-            const err = (data && data.error) ? data.error : `HTTP ${res.status}`;
+          if (!res.ok || !data || typeof data.success !== 'boolean') {
+            const err = (data && data.message) ? data.message : `HTTP ${res.status}`;
             setMsg('danger', `Fehler beim Senden: ${err}`);
-          } else {
-            setMsg('success', 'Vielen Dank! Ihre Nachricht wurde übermittelt.');
+            return;
+          }
+
+          if (data.success) {
+            setMsg('success', data.message || 'Vielen Dank! Ihre Nachricht wurde übermittelt.');
             form.reset();
             form.classList.remove('was-validated');
+          } else {
+            setMsg('danger', data.message || 'Senden fehlgeschlagen.');
           }
         } catch (err) {
-          setMsg('danger', 'Netzwerkfehler. Bitte später erneut versuchen.');
+          const aborted = (err && err.name === 'AbortError');
+          setMsg('danger', aborted ? 'Zeitüberschreitung. Bitte erneut versuchen.' : 'Netzwerkfehler. Bitte später erneut versuchen.');
         } finally {
+          clearTimeout(t);
           btn.disabled = false;
         }
-      });
-    });
+      }, false);
+    })();
   </script>
+
 
 </body>
 

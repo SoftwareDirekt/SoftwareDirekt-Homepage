@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHPMailer Setup Guide for SoftwareDirekt Contact Form</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .code-block {
+            position: relative;
+            font-family: 'Courier New', monospace;
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            cursor: text;
+            user-select: text;
+        }
+        .code-block:hover {
+            background: #334155;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .code-block:hover .copy-btn {
+            opacity: 1;
+        }
+        .copy-btn:hover {
+            background: #2563eb;
+        }
+        .filename {
+            background: #0f172a;
+            color: #94a3b8;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 0;
+        }
+        .filename + .code-block {
+            border-radius: 0 0 8px 8px;
+            margin-top: 0;
+        }
+        .checklist-item {
+            transition: all 0.3s ease;
+        }
+        .checklist-item:hover {
+            background: #f1f5f9;
+        }
+        body {
+            line-height: 1.6;
+        }
+        h1, h2, h3 {
+            line-height: 1.2;
+        }
+        @media print {
+            body {
+                font-size: 12px;
+            }
+            .code-block {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .copy-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">
+                <i class="fas fa-envelope text-blue-600 mr-3"></i>
+                PHPMailer Setup Guide for SoftwareDirekt Contact Form
+            </h1>
+            <h2 class="text-2xl text-gray-600 mb-2">Guaranteed Working Configuration</h2>
+            <p class="text-lg text-gray-500">Step-by-step setup for your contact form using Office 365 SMTP with security features</p>
+        </div>
+
+        <!-- Prerequisites Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-list text-blue-600 mr-2"></i>
+                1. Prerequisites
+            </h2>
+            <p class="text-gray-600 mb-4">Before you begin, ensure you have:</p>
+            <ul class="list-disc list-inside text-gray-700 space-y-2">
+                <li>A web server (e.g., Apache) with PHP 7.4+ and extensions: <code>openssl</code>, <code>curl</code>, <code>sockets</code>, <code>mbstring</code></li>
+                <li>Composer installed on your server</li>
+                <li>An Office 365 account with an app password (not your regular login password)</li>
+                <li>Write access to create a <code>logs/</code> directory</li>
+                <li>A domain (e.g., <code>softwaredirekt.at</code>) with a web root (e.g., <code>/public_html/</code>)</li>
+            </ul>
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4">
+                <p class="text-yellow-800">
+                    <strong>How to Get an App Password:</strong> Log into your Microsoft Account at <a href="https://account.microsoft.com/security" target="_blank" class="underline">account.microsoft.com/security</a>, enable 2-Step Verification, and generate an app password for "Mail."
+                </p>
+            </div>
+        </div>
+
+        <!-- Installation Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-download text-blue-600 mr-2"></i>
+                2. Install Dependencies
+            </h2>
+            <p class="text-gray-600 mb-4">Install PHPMailer and phpdotenv to handle email sending and secure configuration.</p>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Install via Composer</h3>
+                <div class="filename">Terminal Commands</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+# Navigate to your project root (e.g., /public_html or /var/www/softwaredirekt.at)
+cd /path/to/softwaredirekt
+
+# Install PHPMailer and phpdotenv
+composer require phpmailer/phpmailer vlucas/phpdotenv
+
+# Verify installation
+composer show phpmailer/phpmailer
+composer show vlucas/phpdotenv
+                </div>
+            </div>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">composer.json</h3>
+                <div class="filename">composer.json</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+{
+    "require": {
+        "phpmailer/phpmailer": "^6.8",
+        "vlucas/phpdotenv": "^5.4"
+    }
+}
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Structure Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-folder text-green-600 mr-2"></i>
+                3. Set Up Project Structure
+            </h2>
+            <p class="text-gray-600 mb-4">Create the following directory structure in your web root:</p>
+            <div class="filename">Directory Structure</div>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+/softwaredirekt
+├── vendor/
+├── logs/
+├── assets/
+│   ├── css/styles.min.css
+│   ├── js/app.min.js
+│   ├── img/contact-us-1.webp
+│   ├── img/kontakt-header.jpg
+│   ├── favicon.ico
+├── includes/
+│   ├── nav.php
+│   ├── footer.php
+├── .env
+├── config.php
+├── send_mail.php
+├── test_mail.php
+├── server_check.php
+├── kontakt.php
+                </div>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Create Directories and Set Permissions</h3>
+                <div class="filename">Terminal Commands</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+# Create directories
+mkdir -p logs assets/css assets/js assets/img includes
+
+# Set permissions for logs
+chmod 755 logs
+
+# Set permissions for files (after creating them)
+chmod 644 *.php .env
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Form Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-envelope-open-text text-blue-600 mr-2"></i>
+                4. Create Contact Form
+            </h2>
+            <p class="text-gray-600 mb-4">This is your contact form page, which submits data to <code>send_mail.php</code>. It includes Bootstrap styling, CSRF protection, and AJAX submission.</p>
+            <div class="filename">kontakt.php</div>
+            <div class="code-block" style="max-height: 600px; overflow-y: auto;">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+// kontakt.php
+session_start();
+$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+?>
+<!DOCTYPE html>
+<html lang="de-AT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kontakt SoftwareDirekt Wien – Ihr direkter Draht zu Web & IT-Experten</title>
+    <meta name="description" content="Kontaktieren Sie SoftwareDirekt in Wien: Persönliche Beratung, individuelle Angebote, schnelle Hilfe für Webentwicklung, App, Hosting & IT-Service. Wir sind für Sie da!">
+    <meta name="keywords" content="Kontakt SoftwareDirekt, Kontakt Webagentur Wien, Anfrage Webentwicklung, IT Support Kontakt Wien, Beratung Website, Angebot anfordern, Kontaktformular, Rückrufservice, Kontakt IT Dienstleister Wien, Kontakt App Entwicklung, SoftwareFirma Kontakt, Support Wien">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="de-AT">
+    <meta name="geo.region" content="AT-9">
+    <meta name="geo.placename" content="Wien">
+    <meta name="author" content="SoftwareDirekt">
+    <link rel="canonical" href="https://softwaredirekt.at/kontakt.php">
+    <link rel="icon" href="https://softwaredirekt.at/assets/favicon.ico" type="image/x-icon">
+    <meta property="og:locale" content="de_AT">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Kontakt SoftwareDirekt Wien – Ihr direkter Draht zu Web & IT-Experten">
+    <meta property="og:description" content="Jetzt Kontakt aufnehmen: Persönliche Beratung & schnelle Hilfe zu Webentwicklung, App & IT-Service in Wien.">
+    <meta property="og:url" content="https://softwaredirekt.at/kontakt.php">
+    <meta property="og:site_name" content="SoftwareDirekt">
+    <meta property="og:image" content="https://softwaredirekt.at/assets/img/kontakt-header.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kontakt SoftwareDirekt Wien – Ihr direkter Draht zu Web & IT-Experten">
+    <meta name="twitter:description" content="Direkter Kontakt zu SoftwareDirekt – schnelle Antwort, persönliche Beratung & individuelles Angebot für Ihr Projekt in Wien.">
+    <meta name="twitter:image" content="https://softwaredirekt.at/assets/img/kontakt-header.jpg">
+    <meta name="twitter:site" content="@SoftwareDirekt">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="/assets/css/styles.min.css">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "name": "SoftwareDirekt",
+        "image": "https://softwaredirekt.at/assets/img/kontakt-header.jpg",
+        "url": "https://softwaredirekt.at/kontakt.php",
+        "telephone": "+43-660-64-48-088",
+        "email": "office@softwaredirekt.at",
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Liesinger Hauptstraße 42",
+            "addressLocality": "Wien",
+            "addressRegion": "Wien",
+            "postalCode": "1230",
+            "addressCountry": "AT"
+        },
+        "areaServed": "AT",
+        "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": "48.13513",
+            "longitude": "16.28595"
+        },
+        "sameAs": [
+            "https://www.linkedin.com/company/softwaredirekt/",
+            "https://www.facebook.com/softwaredirekt"
+        ],
+        "description": "Kontaktieren Sie SoftwareDirekt in Wien – Ihr IT- und Web-Partner für Beratung, Support & individuelle Angebote.",
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+43-660-64-48-088",
+            "contactType": "customer support",
+            "email": "office@softwaredirekt.at",
+            "availableLanguage": ["de", "en"]
+        }
+    }
+    </script>
+</head>
+<body>
+    <?php include 'includes/nav.php'; ?>
+    <main>
+        <section class="py-5" id="contact-hero">
+            <div class="container">
+                <div class="row d-flex justify-content-center align-items-center">
+                    <div class="col-lg-8 text-center">
+                        <h1>Kontakt</h1>
+                        <h2>Holen Sie sich Ihr unverbindliches Angebot</h2>
+                        <h3>Lassen Sie uns zusammenarbeiten!</h3>
+                        <p>Wir freuen uns darauf, von Ihnen zu hören und Ihre Vision in die Realität umzusetzen.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div class="container my-5 contact-section">
+            <div class="row g-5 align-items-center">
+                <div class="col-12 col-lg-6 contact-image">
+                    <img src="/assets/img/contact-us-1.webp" alt="Kontaktieren Sie SoftwareDirekt" class="img-fluid">
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="contact-form p-4 p-lg-5">
+                        <form id="contactForm" action="/send_mail.php" method="post" autocomplete="off" novalidate>
+                            <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                            <div class="mb-3">
+                                <label for="name" class="form-label fw-semibold">Name</label>
+                                <input type="text" class="form-control" id="name" name="name" placeholder="Ihr Name" required aria-describedby="nameFeedback">
+                                <div id="nameFeedback" class="invalid-feedback">Bitte geben Sie Ihren Namen ein.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="email" class="form-label fw-semibold">E-Mail</label>
+                                <input type="email" class="form-control" id="email" name="email" placeholder="ihre@email.com" required aria-describedby="emailFeedback">
+                                <div id="emailFeedback" class="invalid-feedback">Bitte geben Sie eine gültige E-Mail ein.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="message" class="form-label fw-semibold">Nachricht</label>
+                                <textarea class="form-control" id="message" name="message" rows="5" placeholder="Ihre Nachricht" required aria-describedby="messageFeedback"></textarea>
+                                <div id="messageFeedback" class="invalid-feedback">Bitte geben Sie eine Nachricht ein.</div>
+                            </div>
+                            <input type="text" name="website" id="website" class="d-none" tabindex="-1" autocomplete="off" aria-hidden="true">
+                            <div class="d-grid mt-4">
+                                <button class="btn btn-primary" id="btn-submit" type="submit" aria-label="Formular absenden">Absenden</button>
+                            </div>
+                            <div id="formResponse" class="mt-3" aria-live="polite"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <section class="g-maps bg-white d-none d-md-block">
+            <div class="container-fluid p-0">
+                <div class="row g-0">
+                    <div class="col-lg-12">
+                        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2659.698729135971!2d16.2837653156657!3d48.13512787922394!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x476d06a8c1c2c3ab%3A0x4c4a8b9f7c9b2b7b!2sLiesinger%20Hauptstra%C3%9Fe%2042%2C%201230%20Wien%2C%20Austria!5e0!3m2!1sde!2sat!4v1754670988670!5m2!1sde!2sat" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <?php include 'includes/footer.php'; ?>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="/assets/js/app.min.js" defer></script>
+    <script>
+        (function() {
+            const form = document.getElementById('contactForm');
+            const btn = document.getElementById('btn-submit');
+            const resp = document.getElementById('formResponse');
+
+            function setMsg(type, text) {
+                resp.innerHTML = `<div class="alert alert-${type}" role="alert">${text}</div>`;
+            }
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!form.checkValidity()) {
+                    form.classList.add('was-validated');
+                    return;
+                }
+
+                btn.disabled = true;
+                setMsg('info', 'Sende …');
+
+                const controller = new AbortController();
+                const t = setTimeout(() => controller.abort(), 15000);
+
+                try {
+                    const formData = new FormData(form);
+                    const endpoint = form.getAttribute('action') || '/send_mail.php';
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        cache: 'no-store',
+                        credentials: 'same-origin',
+                        signal: controller.signal
+                    });
+
+                    let data;
+                    try {
+                        data = await res.json();
+                    } catch (_) {
+                        setMsg('danger', 'Fehler beim Verarbeiten der Serverantwort.');
+                        return;
+                    }
+
+                    if (!res.ok || !data || typeof data.success !== 'boolean') {
+                        const err = (data && data.message) ? data.message : `HTTP ${res.status}`;
+                        setMsg('danger', `Fehler beim Senden: ${err}`);
+                        return;
+                    }
+
+                    if (data.success) {
+                        setMsg('success', data.message || 'Vielen Dank! Ihre Nachricht wurde übermittelt.');
+                        form.reset();
+                        form.classList.remove('was-validated');
+                    } else {
+                        setMsg('danger', data.message || 'Senden fehlgeschlagen.');
+                    }
+                } catch (err) {
+                    setMsg('danger', (err.name === 'AbortError') ? 'Zeitüberschreitung. Bitte erneut versuchen.' : 'Netzwerkfehler. Bitte später erneut versuchen.');
+                } finally {
+                    clearTimeout(t);
+                    btn.disabled = false;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
+                </div>
+            </div>
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <p class="text-blue-800">
+                    <strong>Note:</strong> Create placeholder <code>nav.php</code> and <code>footer.php</code> in <code>/includes/</code>, and upload images and CSS/JS assets to <code>/assets/</code>.
+                </p>
+            </div>
+        </div>
+
+        <!-- Configuration Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-cog text-purple-600 mr-2"></i>
+                5. Configure SMTP Settings
+            </h2>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Environment Variables</h3>
+                <div class="filename">.env</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+SMTP_HOST=smtp.office365.com
+SMTP_PORT=587
+SMTP_ENCRYPTION=tls
+SMTP_USERNAME=office@softwaredirekt.at
+SMTP_PASSWORD=your_app_password_here
+SMTP_FROM=office@softwaredirekt.at
+SMTP_FROM_NAME=SoftwareDirekt OG Anfrage
+SMTP_TO=office@softwaredirekt.at
+                </div>
+                <p class="text-gray-600 mt-2">Replace <code>your_app_password_here</code> with your Office 365 app password.</p>
+            </div>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Configuration File</h3>
+                <div class="filename">config.php</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+// config.php - Enhanced configuration for PHPMailer with Office 365 SMTP
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+declare(strict_types=1);
+
+// Load .env file for secure credential storage
+$dotenv = Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Verify PHPMailer is available
+if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+    die('PHPMailer not found. Please run: composer require phpmailer/phpmailer');
+}
+
+// SMTP Configuration - Office 365
+define('SMTP_HOST',       $_ENV['SMTP_HOST'] ?? 'smtp.office365.com');
+define('SMTP_PORT',       (int)($_ENV['SMTP_PORT'] ?? 587));
+define('SMTP_ENCRYPTION', $_ENV['SMTP_ENCRYPTION'] ?? 'tls');
+define('SMTP_USERNAME',   $_ENV['SMTP_USERNAME'] ?? 'office@softwaredirekt.at');
+define('SMTP_PASSWORD',   $_ENV['SMTP_PASSWORD'] ?? 'your_app_password_here');
+define('SMTP_TIMEOUT',    30);
+define('SMTP_FROM',       $_ENV['SMTP_FROM'] ?? 'office@softwaredirekt.at');
+define('SMTP_FROM_NAME',  $_ENV['SMTP_FROM_NAME'] ?? 'SoftwareDirekt OG Anfrage');
+define('SMTP_TO',         $_ENV['SMTP_TO'] ?? 'office@softwaredirekt.at');
+
+// Security & Logging
+define('ENABLE_SMTP_DEBUG', false); // Set to true for debugging
+define('LOG_ERRORS',        true);
+define('LOG_FILE',          __DIR__ . '/logs/mail_errors.log');
+
+// Create logs directory if it doesn't exist
+if (!is_dir(__DIR__ . '/logs')) {
+    mkdir(__DIR__ . '/logs', 0755, true);
+}
+?>
+                </div>
+            </div>
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p class="text-yellow-800">
+                    <strong>Security Note:</strong> Protect <code>.env</code> with <code>.htaccess</code> to prevent unauthorized access.
+                </p>
+            </div>
+        </div>
+
+        <!-- Mail Handler Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-shield-alt text-red-600 mr-2"></i>
+                6. Create Mail Handler with CSRF Protection
+            </h2>
+            <p class="text-gray-600 mb-4">This script processes form submissions from <code>kontakt.php</code>, sends emails via Office 365 SMTP, and includes CSRF protection.</p>
+            <div class="filename">send_mail.php</div>
+            <div class="code-block" style="max-height: 600px; overflow-y: auto;">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+// send_mail.php - Enhanced with CSRF and guaranteed delivery
+declare(strict_types=1);
+session_start();
+
+// Set JSON header for AJAX, fallback to HTML for non-AJAX
+$isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+if ($isAjax) {
+    header('Content-Type: application/json; charset=UTF-8');
+} else {
+    header('Content-Type: text/html; charset=UTF-8');
+}
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
+
+require_once __DIR__ . '/config.php';
+
+// Enhanced error logging
+function logError(string $message): void {
+    if (LOG_ERRORS) {
+        $logEntry = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
+        file_put_contents(LOG_FILE, $logEntry, FILE_APPEND | LOCK_EX);
+    }
+}
+
+function json_fail(int $code, string $msg, string $debugInfo = ''): void {
+    global $isAjax;
+    logError("FAIL [{$code}]: {$msg}" . ($debugInfo ? " | Debug: {$debugInfo}" : ""));
+    if ($isAjax) {
+        http_response_code($code);
+        echo json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo "<p style='color: red;'>$msg</p>";
+    }
+    exit;
+}
+
+function json_ok(string $msg): void {
+    global $isAjax;
+    logError("SUCCESS: {$msg}");
+    if ($isAjax) {
+        echo json_encode(['success' => true, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo "<p style='color: green;'>$msg</p>";
+    }
+    exit;
+}
+
+// Method + Throttle
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    json_fail(405, 'Ungültige Anfrage');
+}
+
+// Rate limiting
+$now = time();
+$last = (int)($_SESSION['last_submit_ts'] ?? 0);
+if ($now - $last < 10) {
+    json_fail(429, 'Bitte kurz warten und erneut senden.');
+}
+$_SESSION['last_submit_ts'] = $now;
+
+// IP-based rate limiting
+$clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$ipKey = 'ip_limit_' . md5($clientIP);
+$ipSubmits = (int)($_SESSION[$ipKey] ?? 0);
+if ($ipSubmits >= 5) {
+    json_fail(429, 'Zu viele Anfragen von dieser IP-Adresse.');
+}
+$_SESSION[$ipKey] = $ipSubmits + 1;
+
+// CSRF validation
+$csrf = $_POST['_csrf'] ?? '';
+if (!isset($_SESSION['csrf_token']) || $csrf !== $_SESSION['csrf_token']) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    json_fail(403, 'Ungültiges CSRF-Token.');
+}
+unset($_SESSION['csrf_token']);
+
+// Honeypot check
+if (trim((string)($_POST['website'] ?? '')) !== '') {
+    json_ok('Danke.');
+}
+
+// Input validation
+$nameRaw    = (string)($_POST['name']    ?? '');
+$emailRaw   = (string)($_POST['email']   ?? '');
+$messageRaw = (string)($_POST['message'] ?? '');
+
+// CRLF injection protection
+if (preg_match('/[\r\n]/', $nameRaw) || preg_match('/[\r\n]/', $emailRaw)) {
+    json_fail(400, 'Ungültige Zeichen.');
+}
+
+$name    = trim(filter_var($nameRaw, FILTER_SANITIZE_FULL_SPECIAL_CHARS, FILTER_FLAG_NO_ENCODE_QUOTES));
+$email   = trim($emailRaw);
+$message = trim($messageRaw);
+
+// Validation
+if (empty($name) || empty($email) || empty($message)) {
+    json_fail(400, 'Bitte alle Pflichtfelder ausfüllen.');
+}
+
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    json_fail(400, 'Bitte eine gültige E-Mail-Adresse eingeben.');
+}
+
+// Length limits
+$name    = mb_substr($name, 0, 200);
+$email   = mb_substr($email, 0, 254);
+$message = mb_substr($message, 0, 5000);
+
+// Enhanced PHPMailer setup
+try {
+    $mail = new PHPMailer(true);
+    
+    // Server settings
+    $mail->isSMTP();
+    $mail->Host       = SMTP_HOST;
+    $mail->SMTPAuth   = true;
+    $mail->Username   = SMTP_USERNAME;
+    $mail->Password   = SMTP_PASSWORD;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port       = SMTP_PORT;
+    $mail->Timeout    = SMTP_TIMEOUT;
+    
+    // Character encoding
+    $mail->CharSet = 'UTF-8';
+    $mail->Encoding = 'base64';
+    $mail->setLanguage('de');
+    
+    // Debug settings
+    if (ENABLE_SMTP_DEBUG) {
+        $mail->SMTPDebug = SMTP::DEBUG_CONNECTION;
+        $mail->Debugoutput = function($str, $level) {
+            logError("SMTP Debug [{$level}]: {$str}");
+        };
+    }
+    
+    // Recipients
+    $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+    $mail->addAddress(SMTP_TO);
+    $mail->addReplyTo($email, $name);
+    
+    // Content
+    $subject = 'Kontaktformular – ' . $name;
+    $mail->Subject = $subject;
+    $mail->isHTML(true);
+    
+    // HTML body
+    $html = '
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body>
+        <h2>Neue Kontaktanfrage</h2>
+        <p><strong>Name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>
+        <p><strong>E-Mail:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</p>
+        <p><strong>Nachricht:</strong></p>
+        <div style="border-left: 3px solid #ccc; padding-left: 15px; margin: 10px 0;">
+            ' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '
+        </div>
+        <hr>
+        <p><small>Gesendet über das Kontaktformular von softwaredirekt.at</small></p>
+    </body>
+    </html>';
+    
+    // Plain text alternative
+    $plain = "Neue Kontaktanfrage\n\n";
+    $plain .= "Name: {$name}\n";
+    $plain .= "E-Mail: {$email}\n\n";
+    $plain .= "Nachricht:\n{$message}\n\n";
+    $plain .= "---\nGesendet über das Kontaktformular von softwaredirekt.at";
+    
+    $mail->Body = $html;
+    $mail->AltBody = $plain;
+    
+    // Send the email
+    if ($mail->send()) {
+        json_ok('Vielen Dank! Ihre Nachricht wurde erfolgreich versendet.');
+    } else {
+        json_fail(500, 'Fehler beim Versenden der E-Mail.', $mail->ErrorInfo);
+    }
+} catch (Exception $e) {
+    $errorMsg = $e->getMessage();
+    $smtpError = isset($mail) ? $mail->ErrorInfo : '';
+    
+    logError("PHPMailer Exception: {$errorMsg} | SMTP Error: {$smtpError}");
+    
+    $userMsg = 'Ihre Nachricht konnte nicht versendet werden. Bitte versuchen Sie es später erneut.';
+    if (ENABLE_SMTP_DEBUG) {
+        $userMsg .= " (Debug: {$errorMsg})";
+    }
+    
+    json_fail(500, $userMsg, $errorMsg);
+}
+?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Testing Scripts Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-flask text-green-600 mr-2"></i>
+                7. Test Your Setup
+            </h2>
+            <p class="text-gray-600 mb-4">Use these scripts to verify your SMTP connection and server requirements.</p>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">SMTP Connection Test</h3>
+                <div class="filename">test_mail.php</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+require_once 'config.php';
+use PHPMailer\PHPMailer\PHPMailer;
+
+try {
+    $mail = new PHPMailer(true);
+    
+    // Test SMTP connection
+    $mail->isSMTP();
+    $mail->Host = SMTP_HOST;
+    $mail->SMTPAuth = true;
+    $mail->Username = SMTP_USERNAME;
+    $mail->Password = SMTP_PASSWORD;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Port = SMTP_PORT;
+    $mail->SMTPDebug = 2; // Enable debug output
+    
+    // Test connection
+    if ($mail->smtpConnect()) {
+        echo "✅ SMTP Connection successful!\n";
+        $mail->smtpClose();
+    } else {
+        echo "❌ SMTP Connection failed!\n";
+    }
+    
+    // Test sending
+    $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+    $mail->addAddress(SMTP_TO);
+    $mail->Subject = 'Test Mail from PHPMailer';
+    $mail->Body = 'This is a test email to verify PHPMailer setup.';
+    
+    if ($mail->send()) {
+        echo "✅ Test email sent successfully!\n";
+    }
+} catch (Exception $e) {
+    echo "❌ Error: " . $e->getMessage() . "\n";
+}
+?>
+                </div>
+            </div>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Server Requirements Check</h3>
+                <div class="filename">server_check.php</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+// server_check.php
+echo "PHP Version: " . PHP_VERSION . "\n";
+echo "OpenSSL: " . (extension_loaded('openssl') ? '✅ Enabled' : '❌ Missing') . "\n";
+echo "cURL: " . (extension_loaded('curl') ? '✅ Enabled' : '❌ Missing') . "\n";
+echo "Sockets: " . (extension_loaded('sockets') ? '✅ Enabled' : '❌ Missing') . "\n";
+echo "PHPMailer: " . (class_exists('PHPMailer\PHPMailer\PHPMailer') ? '✅ Available' : '❌ Missing') . "\n";
+
+// Test SMTP connectivity
+$connection = @fsockopen('smtp.office365.com', 587, $errno, $errstr, 10);
+if ($connection) {
+    echo "SMTP Connection: ✅ Can connect to Office 365\n";
+    fclose($connection);
+} else {
+    echo "SMTP Connection: ❌ Cannot connect ($errno: $errstr)\n";
+}
+?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Enhancements Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-lock text-red-600 mr-2"></i>
+                8. Security Enhancements
+            </h2>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">Protect .env File</h3>
+                <div class="filename">.htaccess</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<Files .env>
+    Order Allow,Deny
+    Deny from all
+</Files>
+                </div>
+            </div>
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-3">File Permissions</h3>
+                <div class="filename">Terminal Commands</div>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+# Set permissions for logs directory
+mkdir logs
+chmod 755 logs
+
+# Set permissions for .env and PHP files
+chmod 644 .env *.php
+                </div>
+            </div>
+        </div>
+
+        <!-- Elementor/WordPress Integration -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-wordpress text-blue-600 mr-2"></i>
+                9. Elementor/WordPress Integration (Optional)
+            </h2>
+            <p class="text-gray-600 mb-4">If using WordPress with Elementor, integrate the contact form as follows:</p>
+            <ul class="list-disc list-inside text-gray-700 space-y-2">
+                <li>Create a new page in Elementor and add an HTML widget.</li>
+                <li>Copy the <code>&lt;form&gt;</code> and JavaScript from <code>kontakt.php</code> into the HTML widget.</li>
+                <li>Place <code>config.php</code>, <code>send_mail.php</code>, and <code>vendor/</code> in your WordPress root.</li>
+                <li>Add Composer autoload to your theme's <code>functions.php</code>.</li>
+            </ul>
+            <div class="filename">functions.php</div>
+            <div class="code-block">
+                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<?php
+// functions.php
+require_once get_template_directory() . '/vendor/autoload.php';
+?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Final Checklist -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-clipboard-check text-blue-600 mr-2"></i>
+                10. Final Guarantee Checklist
+            </h2>
+            <p class="text-gray-600 mb-4">Check off each item to ensure your setup is complete:</p>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>Composer dependencies installed</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>.env file configured with app password</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>kontakt.php uploaded and accessible</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>SMTP connection test successful (test_mail.php)</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>Test email sent successfully</span>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>Logs directory created and writable</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>File permissions set (755 for logs, 644 for files)</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>PHP extensions enabled (openssl, curl, sockets)</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>Contact form submits successfully</span>
+                    </div>
+                    <div class="checklist-item flex items-center p-3 border rounded-lg">
+                        <input type="checkbox" class="mr-3 h-5 w-5 text-blue-600">
+                        <span>CSRF and honeypot protection verified</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Troubleshooting Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-tools text-red-600 mr-2"></i>
+                11. Troubleshooting
+            </h2>
+            <p class="text-gray-600 mb-4">If you encounter issues, try these solutions:</p>
+            <ul class="list-disc list-inside text-gray-700 space-y-2">
+                <li><strong>SMTP Authentication Error:</strong> Verify <code>SMTP_USERNAME</code> and <code>SMTP_PASSWORD</code> in <code>.env</code>. Ensure the app password is valid.</li>
+                <li><strong>Connection Issues:</strong> Confirm port 587 is open with your hosting provider.</li>
+                <li><strong>Emails in Spam:</strong> Ensure <code>SMTP_FROM</code> matches <code>SMTP_USERNAME</code>.</li>
+                <li><strong>Form Submission Errors:</strong> Enable <code>ENABLE_SMTP_DEBUG = true</code> in <code>config.php</code> and check <code>/logs/mail_errors.log</code> or browser console.</li>
+                <li><strong>CSRF Errors:</strong> Ensure <code>session_start()</code> is at the top of <code>kontakt.php</code> and <code>send_mail.php</code>.</li>
+            </ul>
+        </div>
+
+        <!-- Summary -->
+        <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+            <h2 class="text-2xl font-bold mb-4">
+                <i class="fas fa-check-circle mr-2"></i>
+                Setup Complete - Your Contact Form Works!
+            </h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-xl font-semibold mb-3">Key Features:</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-center"><i class="fas fa-check text-green-300 mr-2"></i> Office 365 SMTP Integration</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-300 mr-2"></i> Secure App Password Authentication</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-300 mr-2"></i> Responsive Bootstrap Contact Form</li>
+                        <li class="flex items-center"><i class="fas fa-check text-green-300 mr-2"></i> AJAX Form Submission</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-3">Security Features:</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-center"><i class="fas fa-shield-alt text-green-300 mr-2"></i> CSRF Protection</li>
+                        <li class="flex items-center"><i class="fas fa-shield-alt text-green-300 mr-2"></i> Honeypot Spam Protection</li>
+                        <li class="flex items-center"><i class="fas fa-shield-alt text-green-300 mr-2"></i> Rate Limiting (Time & IP-Based)</li>
+                        <li class="flex items-center"><i class="fas fa-shield-alt text-green-300 mr-2"></i> Input Validation & Sanitization</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function copyCode(button) {
+            const codeBlock = button.parentElement;
+            const code = codeBlock.textContent.replace('Copy', '').trim();
+            navigator.clipboard.writeText(code).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = '#10b981';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#3b82f6';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                const textArea = document.createElement('textarea');
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+
+        document.querySelectorAll('.code-block').forEach(block => {
+            block.addEventListener('click', function() {
+                const range = document.createRange();
+                range.selectNodeContents(this);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+            });
+        });
+    </script>
+</body>
+</html>

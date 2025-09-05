@@ -149,14 +149,13 @@
               <input type="text" name="website" id="website" class="d-none" tabindex="-1" autocomplete="off" aria-hidden="true">
 
               <div class="d-grid mt-4">
-                <button class="btn btn-blue" id="btn-submit" type="submit" aria-label="Formular absenden">
-                  Absenden
-                </button>
+                <button class="btn btn-primary" id="btn-submit" type="submit" aria-label="Formular absenden">Absenden</button>
               </div>
 
               <!-- Rückmeldungen -->
               <div id="formResponse" class="mt-3" aria-live="polite"></div>
             </form>
+
           </div>
         </div>
 
@@ -190,39 +189,29 @@
       const btn = document.getElementById('btn-submit');
       const resp = document.getElementById('formResponse');
 
-      // ARIA: Bildschirmleser informiert werden
-      if (resp && !resp.hasAttribute('aria-live')) {
-        resp.setAttribute('aria-live', 'polite');
-      }
-
       function setMsg(type, text) {
         resp.innerHTML = `<div class="alert alert-${type}" role="alert">${text}</div>`;
       }
 
       form.addEventListener('submit', async function(e) {
-        // Native Validation
         if (!form.checkValidity()) {
           e.preventDefault();
           e.stopPropagation();
           form.classList.add('was-validated');
           return;
         }
-
-        // Progressive Enhancement: nur AJAX wenn fetch verfügbar
         if (!window.fetch) return;
 
         e.preventDefault();
         btn.disabled = true;
         setMsg('info', 'Sende …');
 
-        // Timeout absichern (z. B. 15s)
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 15000);
 
         try {
           const formData = new FormData(form);
           const endpoint = form.getAttribute('action') || '/send_mail.php';
-
           const res = await fetch(endpoint, {
             method: 'POST',
             body: formData,
@@ -235,7 +224,6 @@
             signal: controller.signal
           });
 
-          // Erwartet JSON { success: bool, message?: string }
           let data = null;
           try {
             data = await res.json();
@@ -255,8 +243,7 @@
             setMsg('danger', data.message || 'Senden fehlgeschlagen.');
           }
         } catch (err) {
-          const aborted = (err && err.name === 'AbortError');
-          setMsg('danger', aborted ? 'Zeitüberschreitung. Bitte erneut versuchen.' : 'Netzwerkfehler. Bitte später erneut versuchen.');
+          setMsg('danger', (err && err.name === 'AbortError') ? 'Zeitüberschreitung. Bitte erneut versuchen.' : 'Netzwerkfehler. Bitte später erneut versuchen.');
         } finally {
           clearTimeout(t);
           btn.disabled = false;

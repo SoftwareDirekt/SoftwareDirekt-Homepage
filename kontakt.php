@@ -126,7 +126,7 @@
         <!-- Form Section -->
         <div class="col-12 col-lg-6">
           <div class="contact-form p-4 p-lg-5">
-            <form id="contactForm" action="/send_mail.php" method="post" autocomplete="off" novalidate>
+            <form id="contactForm" action="/send_mail.php" method="post" novalidate>
               <div class="mb-3">
                 <label for="name" class="form-label fw-semibold">Name</label>
                 <input type="text" class="form-control" id="name" name="name" placeholder="Ihr Name" required>
@@ -184,34 +184,36 @@
   <script src="/assets/js/app.min.js" defer="defer"></script>
 
   <script>
-    (function() {
+    (() => {
       const form = document.getElementById('contactForm');
       const btn = document.getElementById('btn-submit');
       const resp = document.getElementById('formResponse');
 
-      function setMsg(type, text) {
+      const setMsg = (type, text) => {
         resp.innerHTML = `<div class="alert alert-${type}" role="alert">${text}</div>`;
-      }
+      };
 
-      form.addEventListener('submit', async function(e) {
+      form.addEventListener('submit', async (e) => {
         if (!form.checkValidity()) {
           e.preventDefault();
           e.stopPropagation();
           form.classList.add('was-validated');
           return;
         }
-        if (!window.fetch) return;
+
+        if (!window.fetch) return; // sehr alte Browser: normales Submit
 
         e.preventDefault();
         btn.disabled = true;
         setMsg('info', 'Sende …');
 
         const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         try {
           const formData = new FormData(form);
           const endpoint = form.getAttribute('action') || '/send_mail.php';
+
           const res = await fetch(endpoint, {
             method: 'POST',
             body: formData,
@@ -224,10 +226,22 @@
             signal: controller.signal
           });
 
-          let data = null;
-          try {
-            data = await res.json();
-          } catch (_) {}
+          // robustes Parsing
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          let data;
+
+          if (ct.includes('application/json')) {
+            try {
+              data = await res.json();
+            } catch {}
+          } else {
+            const text = (await res.text()).trim();
+            // Fallback: interpretiere 2xx + nicht-leere Antwort als Erfolg
+            data = {
+              success: res.ok,
+              message: text || ''
+            };
+          }
 
           if (!res.ok || !data || typeof data.success !== 'boolean') {
             const err = (data && data.message) ? data.message : `HTTP ${res.status}`;
@@ -243,9 +257,11 @@
             setMsg('danger', data.message || 'Senden fehlgeschlagen.');
           }
         } catch (err) {
-          setMsg('danger', (err && err.name === 'AbortError') ? 'Zeitüberschreitung. Bitte erneut versuchen.' : 'Netzwerkfehler. Bitte später erneut versuchen.');
+          setMsg('danger', (err && err.name === 'AbortError') ?
+            'Zeitüberschreitung. Bitte erneut versuchen.' :
+            'Netzwerkfehler. Bitte später erneut versuchen.');
         } finally {
-          clearTimeout(t);
+          clearTimeout(timeoutId);
           btn.disabled = false;
         }
       }, false);

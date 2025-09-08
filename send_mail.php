@@ -1,196 +1,303 @@
 <?php
-// send_mail.php – BULLETPROOF EMAIL SYSTEM with multiple fallbacks
-declare(strict_types=1);
-session_start();
+
+/**
+ * send_mail.php — Stabil, produktionsreif, Office 365 via PHPMailer (PHP ≥5.6)
+ * Ziele:
+ *  - Immer valides JSON (Success/Fehler) ohne HTML-Noise
+ *  - Kein CORS-Geraffel nötig (Same-Origin), aber OPTIONS wird sofort beantwortet
+ *  - Robuste Validierung, Logging mit Fehler-ID, klare Support-Nachricht
+ *
+ * Voraussetzungen:
+ *   composer require phpmailer/phpmailer
+ *   config.php mit SMTP_* und optional SUPPORT_* Konstanten
+ */
+
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+@set_time_limit(15);
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+
+/* -------------------- Response Header -------------------- */
 header('Content-Type: application/json; charset=UTF-8');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store, no-cache, must-revalidate');
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+/* -------------------- Schnelle Antworten -------------------- */
+/* Preflight/Fehlklicks nicht hängen lassen: sofort 204 liefern */
+$method = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : '';
+if ($method === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
 
-require_once __DIR__ . '/vendor/autoload.php';
-require_once __DIR__ . '/config.php';
+/* Optional: harte Same-Origin-Policy (keine „API“-Nutzung über Fremd-Origins) */
+if (!empty($_SERVER['HTTP_ORIGIN'])) {
+  $originHost = parse_url($_SERVER['HTTP_ORIGIN'], PHP_URL_HOST);
+  $thisHost   = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+  if (!hash_equals($thisHost, $originHost)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Ungültige Herkunft.'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+  }
+}
 
-// Debug optional via ?debug=1
-define('DEBUG_MODE', isset($_GET['debug']) && $_GET['debug'] === '1');
-
-// Multiple SMTP configurations for fallback
-$smtp_configs = [
-    'primary' => [
-        'host' => SMTP_HOST,
-        'port' => SMTP_PORT,
-        'encryption' => SMTP_ENCRYPTION,
-        'username' => SMTP_USERNAME,
-        'password' => SMTP_PASSWORD,
-        'name' => 'Primary (Office 365)'
-    ],
-    'gmail' => [
-        'host' => 'smtp.gmail.com',
-        'port' => 587,
-        'encryption' => 'tls',
-        'username' => 'your-gmail@gmail.com', // Replace with your Gmail
-        'password' => 'your-gmail-app-password', // Replace with Gmail App Password
-        'name' => 'Gmail Fallback'
-    ],
-    'sendgrid' => [
-        'host' => 'smtp.sendgrid.net',
-        'port' => 587,
-        'encryption' => 'tls',
-        'username' => 'apikey',
-        'password' => 'your-sendgrid-api-key', // Replace with SendGrid API key
-        'name' => 'SendGrid Fallback'
-    ]
-];
-
-function json_fail(int $code, string $msg): void
+/* -------------------- Helpers -------------------- */
+if (!defined('JSON_FLAGS')) {
+  define('JSON_FLAGS', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+function make_error_id()
 {
+  if (function_exists('random_int')) {
+    return date('YmdHis') . '-' . sprintf('%04x', random_int(0, 0xffff));
+  }
+  return date('YmdHis') . '-' . sprintf('%04x', mt_rand(0, 0xffff));
+}
+function json_fail($code, $msg, $errorId = null)
+{
+  while (ob_get_level()) {
+    ob_end_clean();
+  }
   http_response_code($code);
-  echo json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+  $out = array('success' => false, 'message' => $msg);
+  if ($errorId) {
+    $out['error_id'] = $errorId;
+  }
+  echo json_encode($out, JSON_FLAGS);
   exit;
 }
-function json_ok(string $msg): void
+function json_ok($msg)
 {
-  echo json_encode(['success' => true, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+  while (ob_get_level()) {
+    ob_end_clean();
+  }
+  echo json_encode(array('success' => true, 'message' => $msg), JSON_FLAGS);
   exit;
 }
-function has_crlf(string $s): bool
+function has_crlf($s)
 {
-  return preg_match('/\r|\n/', $s) === 1;
+  return (bool)preg_match('/\r|\n/', $s);
 }
 
-// Method + Throttle
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') json_fail(405, 'Ungültige Anfrage');
-$now = time();
-$last = (int)($_SESSION['last_submit_ts'] ?? 0);
-if ($now - $last < 10) json_fail(429, 'Bitte kurz warten und erneut senden.');
+/* -------------------- Request Guards -------------------- */
+if ($method !== 'POST') {
+  json_fail(405, 'Ungültige Anfrage');
+}
+
+/* Rate Limit pro Session */
+$now  = time();
+$last = isset($_SESSION['last_submit_ts']) ? (int)$_SESSION['last_submit_ts'] : 0;
+if ($now - $last < 10) {
+  json_fail(429, 'Bitte kurz warten und erneut senden.');
+}
 $_SESSION['last_submit_ts'] = $now;
 
-// Honeypot
-if (trim((string)($_POST['website'] ?? '')) !== '') json_ok('Danke.');
+/* Honeypot */
+if (isset($_POST['website']) && trim((string)$_POST['website']) !== '') {
+  json_ok('Vielen Dank!');
+}
 
-// Input
-$nameRaw    = (string)($_POST['name']    ?? '');
-$emailRaw   = (string)($_POST['email']   ?? '');
-$messageRaw = (string)($_POST['message'] ?? '');
+/* -------------------- Autoload / Config -------------------- */
+$autoload = __DIR__ . '/vendor/autoload.php';
+if (!is_file($autoload)) {
+  $id = make_error_id();
+  @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | Autoload fehlt: %s\n", date('c'), $id, $autoload), FILE_APPEND);
+  json_fail(500, "Technischer Fehler. Bitte wenden Sie sich telefonisch an unseren Kundenservice oder per E-Mail an uns. (Fehler-ID: {$id})", $id);
+}
+require_once $autoload;
 
-if (has_crlf($nameRaw) || has_crlf($emailRaw)) json_fail(400, 'Ungültige Zeichen.');
+$configFile = __DIR__ . '/config.php';
+if (!is_file($configFile)) {
+  $id = make_error_id();
+  @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | config.php fehlt\n", date('c'), $id), FILE_APPEND);
+  json_fail(500, "Technischer Fehler. Bitte kontaktieren Sie uns telefonisch oder per E-Mail. (Fehler-ID: {$id})", $id);
+}
+require_once $configFile;
+
+/* -------------------- Environment Checks -------------------- */
+if (!extension_loaded('openssl')) {
+  $id = make_error_id();
+  @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | OpenSSL-Extension fehlt\n", date('c'), $id), FILE_APPEND);
+  json_fail(500, "Der Versand ist derzeit nicht möglich. Bitte kontaktieren Sie uns telefonisch oder per E-Mail. (Fehler-ID: {$id})", $id);
+}
+$must = array('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM', 'SMTP_TO');
+foreach ($must as $k) {
+  if (!defined($k)) {
+    $id = make_error_id();
+    @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | SMTP-Konstante fehlt: %s\n", date('c'), $id, $k), FILE_APPEND);
+    json_fail(500, "Konfigurationsfehler. Bitte kontaktieren Sie uns telefonisch oder per E-Mail. (Fehler-ID: {$id})", $id);
+  }
+}
+
+/* -------------------- Input -------------------- */
+$nameRaw    = isset($_POST['name'])    ? (string)$_POST['name']    : '';
+$emailRaw   = isset($_POST['email'])   ? (string)$_POST['email']   : '';
+$messageRaw = isset($_POST['message']) ? (string)$_POST['message'] : '';
+
+if (has_crlf($nameRaw) || has_crlf($emailRaw)) {
+  json_fail(400, 'Ungültige Zeichen.');
+}
 $name    = trim(filter_var($nameRaw, FILTER_SANITIZE_FULL_SPECIAL_CHARS, FILTER_FLAG_NO_ENCODE_QUOTES));
 $email   = trim($emailRaw);
 $message = trim($messageRaw);
 
-if ($name === '' || $email === '' || $message === '') json_fail(400, 'Bitte alle Pflichtfelder korrekt ausfüllen.');
-if (!filter_var($email, FILTER_VALIDATE_EMAIL))       json_fail(400, 'Bitte eine gültige E-Mail angeben.');
-if (mb_strlen($name) > 200)     $name    = mb_substr($name, 0, 200);
-if (mb_strlen($email) > 254)    $email   = mb_substr($email, 0, 254);
-if (mb_strlen($message) > 5000) $message = mb_substr($message, 0, 5000);
+if ($name === '' || $email === '' || $message === '') {
+  json_fail(400, 'Bitte alle Pflichtfelder korrekt ausfüllen.');
+}
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+  json_fail(400, 'Bitte eine gültige E-Mail angeben.');
+}
+if (mb_strlen($name) > 200) {
+  $name    = mb_substr($name, 0, 200);
+}
+if (mb_strlen($email) > 254) {
+  $email   = mb_substr($email, 0, 254);
+}
+if (mb_strlen($message) > 5000) {
+  $message = mb_substr($message, 0, 5000);
+}
 
-// BULLETPROOF EMAIL SENDING with multiple fallbacks
-$email_sent = false;
-$last_error = '';
-
-// Prepare email content
-$subject = 'Kontaktformular – ' . $name;
-$plain   = "Name: {$name}\nE-Mail: {$email}\n\nNachricht:\n{$message}\n";
-$html    = '<p><strong>Name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>'
+/* -------------------- Mail-Inhalt -------------------- */
+$subject  = 'Kontaktformular – ' . $name;
+$remoteIp = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'n/a';
+$plain = "Name: {$name}\nE-Mail: {$email}\n\nNachricht:\n{$message}\nIP: {$remoteIp}";
+$html  = '<p><strong>Name:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</p>'
   . '<p><strong>E-Mail:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</p>'
-  . '<p><strong>Nachricht:</strong><br>' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</p>';
+  . '<p><strong>Nachricht:</strong><br>' . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . '</p>'
+  . '<p><small>IP: ' . htmlspecialchars((string)$remoteIp, ENT_QUOTES, 'UTF-8') . '</small></p>';
 
-// Try each SMTP configuration until one works
-foreach ($smtp_configs as $config_name => $config) {
-  // Skip if credentials are not set (placeholder values)
-  if (strpos($config['username'], 'your-') === 0 || strpos($config['password'], 'your-') === 0) {
-    continue;
+/* -------------------- Versand via PHPMailer (Office 365) -------------------- */
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+$emailSent = false;
+$errorId   = null;
+$lastError = '';
+// timing info
+$sendMethod = '';
+$sendMs     = 0;
+
+try {
+  $mail = new PHPMailer(true);
+  $mail->CharSet    = 'UTF-8';
+  $mail->Encoding   = 'base64';
+  // $mail->setLanguage('de'); // optional
+
+  $mail->isSMTP();
+  // Prefer IPv4 to avoid potential IPv6 route delays
+  if (defined('SMTP_FORCE_IPV4') && SMTP_FORCE_IPV4) {
+    $mail->Host = gethostbyname(SMTP_HOST);
+  } else {
+    $mail->Host = SMTP_HOST;
   }
-  
-  try {
-    $mail = new PHPMailer(true);
-    $mail->CharSet  = 'UTF-8';
-    $mail->Encoding = 'base64';
-    $mail->setLanguage('de');
+  $mail->SMTPAuth    = true;
+  $mail->Username    = SMTP_USERNAME;
+  $mail->Password    = SMTP_PASSWORD;
+  $mail->Port        = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
+  $enc               = defined('SMTP_ENCRYPTION') ? SMTP_ENCRYPTION : 'tls';
+  $mail->SMTPSecure  = ($enc === 'tls') ? PHPMailer::ENCRYPTION_STARTTLS : PHPMailer::ENCRYPTION_SMTPS;
+  $mail->SMTPAutoTLS = true;
 
-    $mail->isSMTP();
-    $mail->Host       = $config['host'];
-    $mail->SMTPAuth   = true;
-    $mail->Username   = $config['username'];
-    $mail->Password   = $config['password'];
-    $mail->Port       = (int)$config['port'];
-    $mail->SMTPSecure = $config['encryption'] === 'tls' ? PHPMailer::ENCRYPTION_STARTTLS : PHPMailer::ENCRYPTION_SMTPS;
-    
-    // Enhanced timeout settings
-    $mail->Timeout = 30;
-    $mail->SMTPKeepAlive = true;
-    
-    if (DEBUG_MODE) {
-      $mail->SMTPDebug   = 2;
-      $mail->Debugoutput = static function ($str, $level) use ($config_name) {
-        error_log("SMTP[$config_name][$level] $str");
-      };
+  if (defined('SMTP_TIMEOUT')) {
+    $mail->Timeout   = (int)SMTP_TIMEOUT;
+    if (property_exists($mail, 'Timelimit')) {
+      $mail->Timelimit = (int)SMTP_TIMEOUT + 5;
     }
-
-    $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
-    $mail->addAddress(SMTP_TO);
-    $mail->addReplyTo($email, $name);
-
-    $mail->Subject = $subject;
-    $mail->isHTML(true);
-    $mail->Body    = $html;
-    $mail->AltBody = $plain;
-
-    $mail->send();
-    $email_sent = true;
-    
-    // Log successful send
-    @file_put_contents(
-      __DIR__ . '/mail_success.log',
-      sprintf("[%s] SUCCESS via %s: %s -> %s\n", date('c'), $config['name'], $email, SMTP_TO),
-      FILE_APPEND
-    );
-    
-    break; // Exit loop on success
-    
-  } catch (Exception $e) {
-    $last_error = $e->getMessage();
-    
-    // Log the error
-    @file_put_contents(
-      __DIR__ . '/mail_error.log',
-      sprintf("[%s] FAILED via %s: %s | Error: %s\n", date('c'), $config['name'], $email, $e->getMessage()),
-      FILE_APPEND
-    );
-    
-    // Continue to next configuration
-    continue;
   }
+  if (defined('SMTP_KEEPALIVE')) {
+    $mail->SMTPKeepAlive = (bool)SMTP_KEEPALIVE;
+  }
+
+  if (defined('SMTP_TLS_VERIFY') && SMTP_TLS_VERIFY === false) {
+    $mail->SMTPOptions = array(
+      'ssl' => array(
+        'verify_peer'       => false,
+        'verify_peer_name'  => false,
+        'allow_self_signed' => true,
+      )
+    );
+  }
+
+  // From MUSS dem authentifizierten Postfach entsprechen (M365)
+  $fromName = defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Kontaktformular';
+  $mail->setFrom(SMTP_FROM, $fromName);
+  $mail->addAddress(SMTP_TO);
+  $mail->addReplyTo($email, $name);
+
+  $mail->Subject = $subject;
+  $mail->isHTML(true);
+  $mail->Body    = $html;
+  $mail->AltBody = $plain;
+
+  $t0 = microtime(true);
+  $mail->send();
+  $emailSent = true;
+  $sendMethod = 'SMTP';
+  $sendMs = (int)round((microtime(true) - $t0) * 1000);
+} catch (Exception $ex) {
+  $lastError = $ex->getMessage();
+  $errorId   = make_error_id();
+  @file_put_contents(
+    __DIR__ . '/mail_error.log',
+    sprintf("[%s] %s | SMTP ERROR: %s\n", date('c'), $errorId, $lastError),
+    FILE_APPEND
+  );
 }
 
-// If all SMTP methods failed, try PHP mail() as last resort
-if (!$email_sent) {
+/* -------------------- Letzter Fallback: mail() -------------------- */
+if (!$emailSent) {
   try {
-    $headers = [
-      'From: ' . SMTP_FROM_NAME . ' <' . SMTP_FROM . '>',
+    $t1 = microtime(true);
+    $headers = array(
+      'From: ' . (defined('SMTP_FROM_NAME') ? SMTP_FROM_NAME : 'Kontaktformular') . ' <' . SMTP_FROM . '>',
       'Reply-To: ' . $name . ' <' . $email . '>',
+      'MIME-Version: 1.0',
       'Content-Type: text/html; charset=UTF-8',
-      'MIME-Version: 1.0'
-    ];
-    
-    $email_sent = mail(SMTP_TO, $subject, $html, implode("\r\n", $headers));
-    
-    if ($email_sent) {
-      @file_put_contents(
-        __DIR__ . '/mail_success.log',
-        sprintf("[%s] SUCCESS via PHP mail(): %s -> %s\n", date('c'), $email, SMTP_TO),
-        FILE_APPEND
-      );
+    );
+    $emailSent = @mail(
+      SMTP_TO,
+      '=?UTF-8?B?' . base64_encode($subject) . '?=',
+      $html,
+      implode("\r\n", $headers)
+    );
+    if ($emailSent) {
+      $sendMethod = 'mail()';
+      $sendMs = (int)round((microtime(true) - $t1) * 1000);
     }
-  } catch (Exception $e) {
-    $last_error = $e->getMessage();
+    if (!$emailSent && !$errorId) {
+      $errorId = make_error_id();
+      @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | mail() failed\n", date('c'), $errorId), FILE_APPEND);
+    }
+  } catch (Exception $t) {
+    if (!$errorId) {
+      $errorId = make_error_id();
+    }
+    @file_put_contents(__DIR__ . '/mail_error.log', sprintf("[%s] %s | mail() Throwable: %s\n", date('c'), $errorId, $t->getMessage()), FILE_APPEND);
   }
 }
 
-// Final result
-if ($email_sent) {
-  json_ok('Ihre Nachricht wurde erfolgreich versendet!');
-} else {
-  $msg = 'Ihre Nachricht konnte nicht versendet werden! Kontaktieren Sie uns jetzt.';
-  if (DEBUG_MODE) $msg .= ' (Debug: ' . $last_error . ')';
-  json_fail(500, $msg);
+/* -------------------- Logging & Antwort -------------------- */
+if ($emailSent) {
+  @file_put_contents(
+    __DIR__ . '/mail_success.log',
+    sprintf("[%s] SUCCESS via %s in %dms: %s -> %s\n", date('c'), ($sendMethod ?: 'unknown'), (int)$sendMs, $email, SMTP_TO),
+    FILE_APPEND
+  );
+  if ($sendMethod) {
+    @header('X-Mail-Method: ' . $sendMethod);
+  }
+  if ($sendMs) {
+    @header('X-Mail-Duration: ' . (int)$sendMs . 'ms');
+  }
+  json_ok('Vielen Dank! Ihre Nachricht wurde übermittelt.');
 }
+
+$supportTel  = defined('SUPPORT_TEL') ? SUPPORT_TEL : 'unseren Kundenservice';
+$supportMail = defined('SUPPORT_EMAIL') ? SUPPORT_EMAIL : 'office@softwaredirekt.at';
+$msg = "Ihre Nachricht konnte nicht versendet werden. Bitte wenden Sie sich telefonisch an {$supportTel} oder schreiben Sie an {$supportMail}.";
+if ($errorId) {
+  $msg .= " (Fehler-ID: {$errorId})";
+}
+json_fail(500, $msg, $errorId);

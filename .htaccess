@@ -1,0 +1,25 @@
+# .htaccess für softwaredirekt.webdesign-alcor.at
+
+RewriteEngine On
+
+# 1) HTTPS erzwingen – POST-sicher
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=308,L]
+
+# 2) (Optional) Trailing-Slash/Index-Canonicalisierung – POST-sicher
+# Beispiel: /kontakt -> /kontakt/
+#RewriteCond %{REQUEST_FILENAME} !-f
+#RewriteCond %{REQUEST_FILENAME} !-d
+#RewriteRule ^(.+)$ /$1/ [R=308,L]
+
+# 3) (Optional) send_mail.php explizit von späteren Rewrites ausnehmen
+RewriteRule ^send_mail\.php$ - [L]
+
+# 4) (Optional) Security-Header
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "no-referrer-when-downgrade"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-XSS-Protection "0"
+  Header always set Content-Security-Policy "frame-ancestors 'self'"
+</IfModule>
